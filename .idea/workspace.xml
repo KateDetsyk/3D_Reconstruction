@@ -10,7 +10,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="10ede740-275d-4403-8a4e-88d3924fa41f" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -34,7 +34,7 @@
   <component name="PropertiesComponent">
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../ThermalConductivityMPI-master/README.md" />
+    <property name="last_opened_file_path" value="$USER_HOME$/Desktop/my-app/.gitignore" />
     <property name="prettierjs.PrettierConfiguration.Package" value="/usr/local/lib/node_modules/prettier" />
   </component>
   <component name="RunDashboard">
@@ -68,7 +68,7 @@
       <workItem from="1591721466884" duration="11414000" />
       <workItem from="1591777369912" duration="3906000" />
       <workItem from="1591907877123" duration="18000" />
-      <workItem from="1591971524251" duration="1890000" />
+      <workItem from="1591971524251" duration="2283000" />
     </task>
     <servers />
   </component>
