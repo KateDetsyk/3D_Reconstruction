@@ -125,7 +125,6 @@ void calibration_process(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficients,
     worldSpaceCornerPoints.resize(checkerboardImageSpacePoints.size(), worldSpaceCornerPoints[0]);
     //rotation and translation vectors (rVectors, tVectors)
     std::vector <cv::Mat> rVectors, tVectors;
-//    distortionCoefficients = cv::Mat::zeros(1, 5, CV_64F);;
     double res = calibrateCamera(worldSpaceCornerPoints, checkerboardImageSpacePoints, chessboardDimensions, cameraMatrix,
                                  distortionCoefficients, rVectors, tVectors,
                                  (cv::CALIB_FIX_K4 | cv::CALIB_FIX_K5) + cv::CALIB_FIX_INTRINSIC);
@@ -163,9 +162,10 @@ void undistort(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficients) {
 
 
 void disparity(Configuration& configuration) {
+    std::chrono::high_resolution_clock::time_point read_begin, read_end;
+    cv::Mat filtered_disp, conf_map;
     cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_GRAYSCALE);
     cv::Mat im2 = cv::imread("../working_images/undistorted_right.jpg", cv::IMREAD_GRAYSCALE);
-    cv::Mat filtered_disp, conf_map;
     conf_map = cv::Mat(im1.rows,im2.cols,CV_8U);
     conf_map = cv::Scalar(255);
 
@@ -177,38 +177,67 @@ void disparity(Configuration& configuration) {
             windowSize = configuration.windowSize, smoothP1 = configuration.smoothP1 * windowSize * windowSize,
             smoothP2 = configuration.smoothP2 * windowSize * windowSize, disparityMaxDiff = configuration.disparityMaxDiff,
             speckleRange = configuration.speckleRange, speckleWindowSize = configuration.speckleWindowSize;
-
+//    if bm window size = 15
     bool mode = cv::StereoSGBM::MODE_SGBM_3WAY;
     cv::Mat left_disparity, right_disparity ,norm_disparity;
-    cv::Ptr<cv::StereoSGBM> left_matcher = cv::StereoSGBM::create(minDisparity,
-                                                                  disparityRange * 16, windowSize, smoothP1, smoothP2, disparityMaxDiff, preFilterCap,
-                                                                  uniquenessRatio, speckleWindowSize, speckleRange, mode);
-    cv::Ptr<cv::StereoMatcher> right_matcher = cv::ximgproc::createRightMatcher(left_matcher);;
+    read_begin = get_current_time_fenced();
+    if (configuration.downscale) {
+        disparityRange /= 2;
+        resize(im1 ,im1 ,cv::Size(),0.5,0.5, cv::INTER_LINEAR_EXACT);
+        resize(im2, im2, cv::Size(),0.5,0.5, cv::INTER_LINEAR_EXACT);
+    }
     cv::Rect ROI;
-    left_matcher->compute(im1, im2, left_disparity);
-    right_matcher ->compute(im2, im1, right_disparity);
-    cv::Ptr<cv::ximgproc::DisparityWLSFilter> wls_filter = cv::ximgproc::createDisparityWLSFilterGeneric(left_matcher);
-    wls_filter->setLambda(lambda);
-    wls_filter->setSigmaColor(sigma);
-    wls_filter->filter(left_disparity, im1, filtered_disp, right_disparity);
-    conf_map = wls_filter->getConfidenceMap();
-    ROI = wls_filter->getROI();
-    cv::Mat raw_disp_vis, filtered_disp_vis;
+    if (configuration.sgbm){
+        cv::Ptr<cv::StereoSGBM> left_matcher = cv::StereoSGBM::create(minDisparity,
+                                                                      disparityRange * 16, windowSize, smoothP1, smoothP2, disparityMaxDiff, preFilterCap,
+                                                                      uniquenessRatio, speckleWindowSize, speckleRange, mode);
+        cv::Ptr<cv::StereoMatcher> right_matcher = cv::ximgproc::createRightMatcher(left_matcher);
+        left_matcher->compute(im1, im2, left_disparity);
+        right_matcher ->compute(im2, im1, right_disparity);
 
+        cv::Ptr<cv::ximgproc::DisparityWLSFilter> wls_filter = cv::ximgproc::createDisparityWLSFilterGeneric(left_matcher);
+        wls_filter->setLambda(lambda);
+        wls_filter->setSigmaColor(sigma);
+        wls_filter->filter(left_disparity, im1, filtered_disp, right_disparity);
+        conf_map = wls_filter->getConfidenceMap();
+        ROI = wls_filter->getROI();
+    }
+    else if (!configuration.sgbm){
+        cv::Ptr<cv::StereoBM> left_matcher = cv::StereoBM::create(disparityRange * 16, windowSize);
+        cv::Ptr<cv::ximgproc::DisparityWLSFilter> wls_filter = cv::ximgproc::createDisparityWLSFilterGeneric(left_matcher);
+        cv::Ptr<cv::StereoMatcher> right_matcher = cv::ximgproc::createRightMatcher(left_matcher);
+        left_matcher->compute(im1, im2, left_disparity);
+        right_matcher ->compute(im2, im1, right_disparity);
+        wls_filter->setLambda(lambda);
+        wls_filter->setSigmaColor(sigma);
+        wls_filter->filter(left_disparity, im1, filtered_disp, right_disparity);
+        conf_map = wls_filter->getConfidenceMap();
+        ROI = wls_filter->getROI();
+    }
+    if (configuration.downscale) {
+        resize(left_disparity, left_disparity, cv::Size(),2.0,2.0, cv::INTER_LINEAR_EXACT);
+        left_disparity = left_disparity*2.0;
+        ROI = cv::Rect(ROI.x*2,ROI.y*2,ROI.width*2,ROI.height*2);
+    }
+
+    read_end = get_current_time_fenced();
+    auto read_total = to_us(read_end - read_begin);
+    std::cout << "Loading: " << read_total << std::endl;
+
+    cv::Mat raw_disp_vis, filtered_disp_vis;
     cv::ximgproc::getDisparityVis(left_disparity,raw_disp_vis,vis_mult);
     cv::imwrite("../working_images/raw_disparity.jpg", raw_disp_vis);
+
     normalize(filtered_disp_vis, filtered_disp_vis, 0, 255, cv::NORM_MINMAX, CV_8U);
     cv::ximgproc::getDisparityVis(filtered_disp,filtered_disp_vis,vis_mult);
     cv::imwrite("../working_images/filtered_disparity.jpg", filtered_disp_vis);
-    cv::Mat imgCalorBONE;
-    applyColorMap(filtered_disp_vis, imgCalorBONE, cv::COLORMAP_BONE);
-    cv::imwrite("../working_images/filtered_disparity_bone.jpg", imgCalorBONE);
+
 }
 
 
 void save(const cv::Mat& image3D, const std::string& fileName)
 {
-    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_GRAYSCALE);
+    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_COLOR);
     std::ofstream outFile(fileName);
     if (!outFile.is_open())
     {
@@ -218,8 +247,7 @@ void save(const cv::Mat& image3D, const std::string& fileName)
     for (int i = 0; i < image3D.rows; i++)
     {
         const auto* image3D_ptr = image3D.ptr<cv::Vec3f>(i);
-        for (int j = 0; j < image3D.cols; j++)
-        {
+        for (int j = 0; j < image3D.cols; j++){
             outFile << image3D_ptr[j][0] << " " << image3D_ptr[j][1] << " " << image3D_ptr[j][2] << " " <<
                     static_cast<unsigned>(im1.at<uchar>(i,j)) << " " << static_cast<unsigned>(im1.at<uchar>(i,j)) << " "
                     << static_cast<unsigned>(im1.at<uchar>(i,j)) << std::endl;
@@ -229,15 +257,22 @@ void save(const cv::Mat& image3D, const std::string& fileName)
 }
 
 
-void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion) {
-    int minHessian = 600;
+void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion, Configuration& configuration) {
+    std::vector<cv::KeyPoint> keypoints1, keypoints2;
     cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg");
     cv::Mat im2 = cv::imread("../working_images/undistorted_right.jpg");
-    cv::Ptr<cv::xfeatures2d::SURF> detector = cv::xfeatures2d::SURF::create( minHessian);
-    std::vector<cv::KeyPoint> keypoints1, keypoints2;
     cv::Mat desc1, desc2;
-    detector->detectAndCompute( im1, cv::noArray(), keypoints1, desc1 );
-    detector->detectAndCompute( im2, cv::noArray(), keypoints2, desc2 );
+    if (configuration.surf) {
+        cv::Ptr<cv::xfeatures2d::SURF> detector = cv::xfeatures2d::SURF::create(configuration.minHessian);
+        detector->detectAndCompute( im1, cv::noArray(), keypoints1, desc1 );
+        detector->detectAndCompute( im2, cv::noArray(), keypoints2, desc2 );
+    }
+    else if (!configuration.surf){
+        cv::Ptr<cv::AKAZE> akaze_detctor = cv::AKAZE::create();
+        akaze_detctor -> detectAndCompute(im1, cv::noArray(), keypoints1, desc1);
+        akaze_detctor -> detectAndCompute(im2, cv::noArray(), keypoints2, desc2);
+    }
+
     auto* matcher = new cv::BFMatcher(cv::NORM_L2, false);
     std::vector< std::vector<cv::DMatch> > matches_2nn_12, matches_2nn_21;
     matcher->knnMatch( desc1, desc2, matches_2nn_12, 2 );
@@ -258,9 +293,8 @@ void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion) {
             }
         }
     }
-    cv::Mat Kd;
+    cv::Mat Kd, mask;
     camera_matrix.convertTo(Kd, CV_64F);
-    cv::Mat mask;
     cv::Mat E = cv::findEssentialMat(selected_points1, selected_points2, Kd.at<double>(0,0),
                                      cv::Point2d(im1.cols/2., im1.rows/2.),
                                      cv::RANSAC, 0.999, 1.0, mask);
@@ -274,23 +308,34 @@ void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion) {
     }
     mask.release();
 
-    cv::Mat R, t;
+    cv::Mat R, t, R1, R2, P1, P2;
     cv::recoverPose(E, inlier_match_points1, inlier_match_points2, R, t, Kd.at<double>(0,0),
                     cv::Point2d(im1.cols/2., im1.rows/2.), mask);
-    cv::Mat R1, R2, P1, P2;
     cv::stereoRectify(camera_matrix, distortion, camera_matrix, distortion, im1.size(), R, t, R1, R2, P1, P2, Q,
                       cv::CALIB_ZERO_DISPARITY, 1, im1.size());
 }
 
 
-void point_cloud(cv::Mat &Q) {
+void point_cloud(cv::Mat &Q, Configuration& configuration) {
+    double min, max;
+    cv::Mat image3DOCV, colors,  scaledDisparityMap;
     cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg");
     cv::Mat im2 = cv::imread("../working_images/undistorted_right.jpg");
     cv::Mat disp = cv::imread("../working_images/filtered_disparity.jpg", cv::IMREAD_GRAYSCALE);
-    std::string path = "../calibration_images";
-    cv::Mat image3DOCV, colors;
-    reprojectImageTo3D(disp, image3DOCV, Q, true, CV_32F);
-    save(image3DOCV, "../points.txt");
+    minMaxIdx(disp, &min, &max);
+    convertScaleAbs( disp, scaledDisparityMap, 255 / ( max - min ) );
+    disp.convertTo( disp, CV_32FC1 );
+    reprojectImageTo3D(disp, image3DOCV, Q, true, -1);
+
+    cv::Mat dst, thresholded_disp, pointcloud_tresh, color_tresh;
+    cv::adaptiveThreshold(scaledDisparityMap, thresholded_disp, 255,cv::ADAPTIVE_THRESH_GAUSSIAN_C,cv::THRESH_BINARY,3,1);
+    resize( thresholded_disp, dst, cv::Size( 640, 480 ), 0, 0, cv::INTER_LINEAR_EXACT );
+    cv::imwrite("../working_images/disparity_thresh.jpg", dst);
+    image3DOCV.copyTo( pointcloud_tresh, thresholded_disp );
+
+    if (configuration.save_points){
+        save(pointcloud_tresh, "../points.txt");
+    }
 }
 
 void write_yml_file(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficient, std::string file_path) {
@@ -310,12 +355,11 @@ void read_yml_file(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficient, std::s
 
 int main(int argc, char* argv[]) {
     // conf read
-    std::string config_file;
-    if (argc == 2){config_file = argv[1];}
-    else if (argc == 1){config_file = "../conf.txt";}
-    else{throw std::runtime_error("Incorrect amount of arguments!");}
+    Configuration configuration{};
+    cv::Mat cameraMatrix, distortionCoefficient;
 
-    Configuration configuration;
+    // Reading configuration
+    std::string config_file = "../conf.txt";
     std::ifstream config_stream(config_file);
     if(!config_stream.is_open()){
         throw std::runtime_error("Failed to open configurations file " + config_file);
@@ -326,35 +370,25 @@ int main(int argc, char* argv[]) {
 
     auto start_time = get_current_time_fenced();
 
-    cv::Mat cameraMatrix, distortionCoefficient;
-
+    //Calibrate camera or read from yml file
     if (configuration.with_calibration){
         calibration_process(cameraMatrix, distortionCoefficient, threads);
         write_yml_file(cameraMatrix, distortionCoefficient, "../CalibrationMatrices.yml");
     } else {
-        std::cout << "here" << std::endl;
         read_yml_file(cameraMatrix, distortionCoefficient, "../CalibrationMatrices.yml");
     }
+    //Getting disparity and making point cloud
     if (configuration.find_points){
+        cv::Mat Q;
         undistort(cameraMatrix, distortionCoefficient);
         disparity(configuration);
-        cv::Mat Q;
-        findRTQ(Q, cameraMatrix, distortionCoefficient);
-        point_cloud(Q);
+        findRTQ(Q, cameraMatrix, distortionCoefficient, configuration);
+        point_cloud(Q, configuration);
     }
 
-
-//    calibration_process(cameraMatrix, distortionCoefficient, threads);
-//
-//
-//    undistort(cameraMatrix, distortionCoefficient);
-//    disparity();
-//    cv::Mat Q;
-//    findRTQ(Q, cameraMatrix, distortionCoefficient);
-//    point_cloud(Q);
-
     auto finish_time = get_current_time_fenced();
-    auto result_time = to_us(finish_time - start_time)/1000000;
+//    auto result_time = to_us(finish_time - start_time)/1000000;
+    auto result_time = to_us(finish_time - start_time);
     std::cout << "Total time in seconds: " << result_time <<std::endl;
     return 0;
 }
