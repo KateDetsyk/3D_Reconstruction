@@ -1,6 +1,6 @@
 # 3D Reconstruction
 
-###Build && Run :
+### Build && Run :
 ```
 $ mkdir build && cd build
 $ cmake -DCMAKE_BUILD_TYPE=Release  -G"Unix Makefiles" ..
@@ -21,7 +21,7 @@ Run mpi like this
 $ mpirun -np [number of processes] ./mpi
 ```
 
-###Configurations :
+### Configurations :
 You can specify a configuration in the file `conf.txt`
 ```
     with_calibration: true
