@@ -1,8 +1,9 @@
-with_calibration: true
+with_calibration: false
 find_points: true
 save_points: true
+visualize: true
 sgbm: true
-downscale: true
+downscale: false
 surf: true
 maxThreadsNumber: 4
 lambda: 8000.0

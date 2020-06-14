@@ -12,6 +12,7 @@ struct Configuration
     bool with_calibration;
     bool find_points;
     bool save_points;
+    bool visualize;
     bool sgbm;
     bool downscale;
     bool surf;
@@ -46,6 +47,7 @@ Configuration read_configuration(std::ifstream &config_stream){
     conf.with_calibration = (confKeywords["with_calibration:"] == "true") ? true : false;
     conf.find_points = (confKeywords["find_points:"] == "true") ? true : false;
     conf.save_points = (confKeywords["save_points:"] == "true") ? true : false;
+    conf.visualize = (confKeywords["visualize:"] == "true") ? true : false;
     conf.sgbm = (confKeywords["sgbm:"] == "true") ? true : false;
     conf.downscale = (confKeywords["downscale:"] == "true") ? true : false;
     conf.surf = (confKeywords["surf:"] == "true") ? true : false;

@@ -235,9 +235,8 @@ void disparity(Configuration& configuration) {
 }
 
 
-void save(const cv::Mat& image3D, const std::string& fileName)
+void save(const cv::Mat& image3D, const std::string& fileName, Configuration& configuration, cv::Mat &im1)
 {
-    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_COLOR);
     std::ofstream outFile(fileName);
     if (!outFile.is_open())
     {
@@ -247,10 +246,14 @@ void save(const cv::Mat& image3D, const std::string& fileName)
     for (int i = 0; i < image3D.rows; i++)
     {
         const auto* image3D_ptr = image3D.ptr<cv::Vec3f>(i);
-        for (int j = 0; j < image3D.cols; j++){
-            outFile << image3D_ptr[j][0] << " " << image3D_ptr[j][1] << " " << image3D_ptr[j][2] << " " <<
-                    static_cast<unsigned>(im1.at<uchar>(i,j)) << " " << static_cast<unsigned>(im1.at<uchar>(i,j)) << " "
-                    << static_cast<unsigned>(im1.at<uchar>(i,j)) << std::endl;
+        for (int j = 0; j < image3D.cols; j++)
+        {
+            if (std::isfinite(image3D_ptr[j][0]) && std::isfinite(image3D_ptr[j][1]
+                                                                  && std::isfinite(image3D_ptr[j][2]))){
+                outFile << image3D_ptr[j][0] << " " << image3D_ptr[j][1] << " " << image3D_ptr[j][2] << " " <<
+                        static_cast<unsigned>(im1.at<uchar>(i,j)) << " " << static_cast<unsigned>(im1.at<uchar>(i,j)) << " "
+                        << static_cast<unsigned>(im1.at<uchar>(i,j)) << std::endl;
+            }
         }
     }
     outFile.close();
@@ -313,28 +316,36 @@ void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion, Configurat
                     cv::Point2d(im1.cols/2., im1.rows/2.), mask);
     cv::stereoRectify(camera_matrix, distortion, camera_matrix, distortion, im1.size(), R, t, R1, R2, P1, P2, Q,
                       cv::CALIB_ZERO_DISPARITY, 1, im1.size());
+    cv::Mat map1x, map1y, map2x, map2y;
+    initUndistortRectifyMap( camera_matrix, distortion, R1, P1, im1.size(), CV_32FC1, map1x, map1y );
+    initUndistortRectifyMap( camera_matrix, distortion, R2, P2, im1.size(), CV_32FC1, map2x, map2y );
+    cv::Mat im1_remap;
+    remap( im1, im1_remap, map2x, map2y, cv::INTER_NEAREST, cv::BORDER_CONSTANT, cv::Scalar());
+    cv::imwrite("../working_images/left_remap.jpg", im1_remap);
 }
 
 
 void point_cloud(cv::Mat &Q, Configuration& configuration) {
     double min, max;
     cv::Mat image3DOCV, colors,  scaledDisparityMap;
-    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg");
-    cv::Mat im2 = cv::imread("../working_images/undistorted_right.jpg");
+    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_GRAYSCALE);
     cv::Mat disp = cv::imread("../working_images/filtered_disparity.jpg", cv::IMREAD_GRAYSCALE);
     minMaxIdx(disp, &min, &max);
     convertScaleAbs( disp, scaledDisparityMap, 255 / ( max - min ) );
     disp.convertTo( disp, CV_32FC1 );
+//    reprojectImageTo3D(disp, image3DOCV, Q, true, CV_32F);
     reprojectImageTo3D(disp, image3DOCV, Q, true, -1);
 
     cv::Mat dst, thresholded_disp, pointcloud_tresh, color_tresh;
     cv::adaptiveThreshold(scaledDisparityMap, thresholded_disp, 255,cv::ADAPTIVE_THRESH_GAUSSIAN_C,cv::THRESH_BINARY,3,1);
-    resize( thresholded_disp, dst, cv::Size( 640, 480 ), 0, 0, cv::INTER_LINEAR_EXACT );
+    resize( thresholded_disp, dst, cv::Size( image3DOCV.cols, image3DOCV.rows ), 1, 1, cv::INTER_LINEAR_EXACT );
     cv::imwrite("../working_images/disparity_thresh.jpg", dst);
     image3DOCV.copyTo( pointcloud_tresh, thresholded_disp );
-
     if (configuration.save_points){
-        save(pointcloud_tresh, "../points.txt");
+        if (pointcloud_tresh.size() != im1.size()){
+            cv::resize(im1, im1, cv::Size(pointcloud_tresh.cols, pointcloud_tresh.rows));
+            save(pointcloud_tresh, "../points.txt", configuration, im1);
+        }
     }
 }
 

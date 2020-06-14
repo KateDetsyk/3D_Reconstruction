@@ -1,21 +1,15 @@
 #include <iostream>
-//#include <filesystem>
-#include <fstream>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/ximgproc/disparity_filter.hpp>
 #include <opencv2/core/utility.hpp>
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
 #include <utility>
-#include <cassert>
 #include <vector>
-//#include <opencv2/core/ocl.hpp>
 #include "helping_functions/config_parser.h"
-
 
 
 inline std::chrono::high_resolution_clock::time_point get_current_time_fenced()
@@ -34,7 +28,6 @@ inline long long to_us(const D& d)
 }
 
 
-
 void process_images(cv::Size &chessboard_size, std::vector<std::vector<cv::Point2f>>& allFoundCorners) {
 //    Function to iterate through images
 //    taken for camera calibration
@@ -43,7 +36,7 @@ void process_images(cv::Size &chessboard_size, std::vector<std::vector<cv::Point
     cv::glob(path_to_directory, filenames);
     std::vector<cv::Point2f> pointBuffer;
     for (const auto & filename : filenames) {
-        if (filename != "../calibration_images/.DS_Store"){
+        if (filename != "../calibration_images/.DS_Store"){      //for macOS
             cv::Mat im = cv::imread(filename);
             bool found = findChessboardCorners(im, chessboard_size, pointBuffer,
                                                cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
@@ -54,7 +47,7 @@ void process_images(cv::Size &chessboard_size, std::vector<std::vector<cv::Point
                 cv::Mat gray_im;
                 cvtColor(im, gray_im, cv::COLOR_BGR2GRAY);
                 cv::TermCriteria criteria = cv::TermCriteria( cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER,
-                                                      30,0.1 );
+                                                              30,0.1 );
                 cv::Size winSize = cv::Size( 11, 11);
                 cv::Size zeroZone = cv::Size( -1, -1 );
                 //cornerSubPix is the algorithm focused on relocating the points. it receives the image, the corners
@@ -73,8 +66,8 @@ void calibration_process(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficients)
     float calibrationSquareDimension = 0.029f;
 
     std::vector <std::vector<cv::Point2f>> checkerboardImageSpacePoints;
-
     process_images(chessboardDimensions, checkerboardImageSpacePoints);
+
     //
     std::vector <std::vector<cv::Point3f>> worldSpaceCornerPoints(1);
     for (int i = 0; i < chessboardDimensions.height; i++) {
@@ -87,8 +80,6 @@ void calibration_process(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficients)
 
     //rotation and translation vectors (rVectors, tVectors)
     std::vector <cv::Mat> rVectors, tVectors;
-//    distortionCoefficients = cv::Mat::zeros(1, 5, CV_64F);;
-
     double res = calibrateCamera(worldSpaceCornerPoints, checkerboardImageSpacePoints, chessboardDimensions, cameraMatrix,
                                  distortionCoefficients, rVectors, tVectors,
                                  (cv::CALIB_FIX_K4 | cv::CALIB_FIX_K5) + cv::CALIB_FIX_INTRINSIC);
@@ -105,7 +96,7 @@ void undistort(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficients) {
     int width = im1.size().width;
     int height = im1.size().height;
     cv::Mat new_camera_matrix = getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients,
-                                                      {width, height}, 1, {width, height}, nullptr);
+                                                          {width, height}, 1, {width, height}, nullptr);
     cv::Mat im1_udist, im2_undist;
     undistort(im1, im1_udist, cameraMatrix, distortionCoefficients, new_camera_matrix);
     undistort(im2, im2_undist, cameraMatrix, distortionCoefficients, new_camera_matrix);
@@ -188,28 +179,6 @@ void disparity(Configuration& configuration) {
 }
 
 
-void save(const cv::Mat& image3D, const std::string& fileName)
-{
-    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_COLOR);
-    std::ofstream outFile(fileName);
-    if (!outFile.is_open())
-    {
-        std::cerr << "ERROR: Could not open " << fileName << std::endl;
-        return;
-    }
-    for (int i = 0; i < image3D.rows; i++)
-    {
-        const auto* image3D_ptr = image3D.ptr<cv::Vec3f>(i);
-        for (int j = 0; j < image3D.cols; j++){
-            outFile << image3D_ptr[j][0] << " " << image3D_ptr[j][1] << " " << image3D_ptr[j][2] << " " <<
-                    static_cast<unsigned>(im1.at<uchar>(i,j)) << " " << static_cast<unsigned>(im1.at<uchar>(i,j)) << " "
-                    << static_cast<unsigned>(im1.at<uchar>(i,j)) << std::endl;
-        }
-    }
-    outFile.close();
-}
-
-
 void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion, Configuration& configuration) {
     std::vector<cv::KeyPoint> keypoints1, keypoints2;
     cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg");
@@ -266,30 +235,63 @@ void findRTQ(cv::Mat &Q, cv::Mat &camera_matrix, cv::Mat &distortion, Configurat
                     cv::Point2d(im1.cols/2., im1.rows/2.), mask);
     cv::stereoRectify(camera_matrix, distortion, camera_matrix, distortion, im1.size(), R, t, R1, R2, P1, P2, Q,
                       cv::CALIB_ZERO_DISPARITY, 1, im1.size());
+    cv::Mat map1x, map1y, map2x, map2y;
+    initUndistortRectifyMap( camera_matrix, distortion, R1, P1, im1.size(), CV_32FC1, map1x, map1y );
+    initUndistortRectifyMap( camera_matrix, distortion, R2, P2, im1.size(), CV_32FC1, map2x, map2y );
+    cv::Mat im1_remap;
+    remap( im1, im1_remap, map2x, map2y, cv::INTER_NEAREST, cv::BORDER_CONSTANT, cv::Scalar());
+    cv::imwrite("../working_images/left_remap.jpg", im1_remap);
 }
+
+
+void save(const cv::Mat& image3D, const std::string& fileName, Configuration& configuration, cv::Mat &im1)
+{
+    std::ofstream outFile(fileName);
+    if (!outFile.is_open())
+    {
+        std::cerr << "ERROR: Could not open " << fileName << std::endl;
+        return;
+    }
+    for (int i = 0; i < image3D.rows; i++)
+    {
+        const auto* image3D_ptr = image3D.ptr<cv::Vec3f>(i);
+        for (int j = 0; j < image3D.cols; j++)
+        {
+            if (std::isfinite(image3D_ptr[j][0]) && std::isfinite(image3D_ptr[j][1]
+                                                                  && std::isfinite(image3D_ptr[j][2]))){
+                outFile << image3D_ptr[j][0] << " " << image3D_ptr[j][1] << " " << image3D_ptr[j][2] << " " <<
+                        static_cast<unsigned>(im1.at<uchar>(i,j)) << " " << static_cast<unsigned>(im1.at<uchar>(i,j)) << " "
+                        << static_cast<unsigned>(im1.at<uchar>(i,j)) << std::endl;
+            }
+        }
+    }
+    outFile.close();
+}
+
 
 void point_cloud(cv::Mat &Q, Configuration& configuration) {
     double min, max;
     cv::Mat image3DOCV, colors,  scaledDisparityMap;
-    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg");
-    cv::Mat im2 = cv::imread("../working_images/undistorted_right.jpg");
+    cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_GRAYSCALE);
     cv::Mat disp = cv::imread("../working_images/filtered_disparity.jpg", cv::IMREAD_GRAYSCALE);
     minMaxIdx(disp, &min, &max);
     convertScaleAbs( disp, scaledDisparityMap, 255 / ( max - min ) );
     disp.convertTo( disp, CV_32FC1 );
+//    reprojectImageTo3D(disp, image3DOCV, Q, true, CV_32F);
     reprojectImageTo3D(disp, image3DOCV, Q, true, -1);
 
     cv::Mat dst, thresholded_disp, pointcloud_tresh, color_tresh;
     cv::adaptiveThreshold(scaledDisparityMap, thresholded_disp, 255,cv::ADAPTIVE_THRESH_GAUSSIAN_C,cv::THRESH_BINARY,3,1);
-    resize( thresholded_disp, dst, cv::Size( 640, 480 ), 0, 0, cv::INTER_LINEAR_EXACT );
+    resize( thresholded_disp, dst, cv::Size( image3DOCV.cols, image3DOCV.rows ), 1, 1, cv::INTER_LINEAR_EXACT );
     cv::imwrite("../working_images/disparity_thresh.jpg", dst);
     image3DOCV.copyTo( pointcloud_tresh, thresholded_disp );
-
     if (configuration.save_points){
-        save(pointcloud_tresh, "../points.txt");
+        if (pointcloud_tresh.size() != im1.size()){
+            cv::resize(im1, im1, cv::Size(pointcloud_tresh.cols, pointcloud_tresh.rows));
+            save(pointcloud_tresh, "../points.txt", configuration, im1);
+        }
     }
 }
-
 
 void write_yml_file(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficient, std::string file_path) {
     cv::FileStorage fs(file_path, cv::FileStorage::WRITE);
@@ -304,6 +306,7 @@ void read_yml_file(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficient, std::s
     fs["distortionCoefficient"] >> distortionCoefficient;
     fs.release();
 }
+
 
 int main() {
     Configuration configuration{};
@@ -332,6 +335,11 @@ int main() {
         findRTQ(Q, cameraMatrix, distortionCoefficient, configuration);
         point_cloud(Q, configuration);
     }
-
     return 0;
 }
+
+//mkdir build && cd build
+//
+//cmake -DCMAKE_BUILD_TYPE=Release  -G"Unix Makefiles" ..
+//
+//make

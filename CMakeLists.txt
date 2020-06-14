@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(AKS_proekt)
-
 set(CMAKE_CXX_STANDARD 17)
+
 #set(CMAKE_CXX_COMPILER "mpic++")                           # for mpi
-#
 #set(Boost_USE_MULTITHREADED TRUE)                          # for mpi
 #find_package(Boost COMPONENTS mpi serialization REQUIRED)  # for mpi
 
@@ -34,5 +33,5 @@ target_link_libraries(reconstruct_t ${OpenCV_LIBS} Threads::Threads)
 
 target_link_libraries(visualize ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${GLFW_LIBRARIES} ${GLM_LIBRARIES})
 
-#add_executable(mpi mpi.cpp helping_functions/config_parser.h)   # for mpi
+#add_executable(mpi mpi.cpp helping_functions/config_parser.h)     # for mpi
 #target_link_libraries(mpi ${OpenCV_LIBS} ${Boost_LIBRARIES})      # for mpi
