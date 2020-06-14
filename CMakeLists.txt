@@ -8,12 +8,10 @@ set(CMAKE_CXX_STANDARD 17)
 
 #include_directories(/usr/local/include/opencv4)
 find_package(OpenCV REQUIRED)
-find_package(OpenCV REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(GLM REQUIRED)
 
-include_directories(${OpenCV_LIBS})
 include_directories(${OpenCV_LIBS})
 include_directories(${GLM_INCLUDE_DIRS})
 #include_directories(/usr/local/include/GLFW)

@@ -21,24 +21,6 @@
 #include "helping_functions/config_parser.h"
 
 
-
-inline std::chrono::high_resolution_clock::time_point get_current_time_fenced()
-{
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    auto res_time = std::chrono::high_resolution_clock::now();
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    return res_time;
-}
-
-
-template<class D>
-inline long long to_us(const D& d)
-{
-    return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
-}
-
-
-
 void process_images(cv::Size &chessboard_size, std::vector<cv::String>& filenames, int start, int end,
                     ThreadSafeQueue<std::vector<cv::Point2f>>& q) {
 //    Function to iterate through images
@@ -162,7 +144,6 @@ void undistort(cv::Mat& cameraMatrix, cv::Mat& distortionCoefficients) {
 
 
 void disparity(Configuration& configuration) {
-    std::chrono::high_resolution_clock::time_point read_begin, read_end;
     cv::Mat filtered_disp, conf_map;
     cv::Mat im1 = cv::imread("../working_images/undistorted_left.jpg", cv::IMREAD_GRAYSCALE);
     cv::Mat im2 = cv::imread("../working_images/undistorted_right.jpg", cv::IMREAD_GRAYSCALE);
@@ -180,7 +161,6 @@ void disparity(Configuration& configuration) {
 //    if bm window size = 15
     bool mode = cv::StereoSGBM::MODE_SGBM_3WAY;
     cv::Mat left_disparity, right_disparity ,norm_disparity;
-    read_begin = get_current_time_fenced();
     if (configuration.downscale) {
         disparityRange /= 2;
         resize(im1 ,im1 ,cv::Size(),0.5,0.5, cv::INTER_LINEAR_EXACT);
@@ -219,10 +199,6 @@ void disparity(Configuration& configuration) {
         left_disparity = left_disparity*2.0;
         ROI = cv::Rect(ROI.x*2,ROI.y*2,ROI.width*2,ROI.height*2);
     }
-
-    read_end = get_current_time_fenced();
-    auto read_total = to_us(read_end - read_begin);
-    std::cout << "Loading: " << read_total << std::endl;
 
     cv::Mat raw_disp_vis, filtered_disp_vis;
     cv::ximgproc::getDisparityVis(left_disparity,raw_disp_vis,vis_mult);
@@ -378,9 +354,6 @@ int main(int argc, char* argv[]) {
     configuration = read_configuration(config_stream);
     int threads = configuration.maxThreadsNumber;
 
-
-    auto start_time = get_current_time_fenced();
-
     //Calibrate camera or read from yml file
     if (configuration.with_calibration){
         calibration_process(cameraMatrix, distortionCoefficient, threads);
@@ -396,11 +369,6 @@ int main(int argc, char* argv[]) {
         findRTQ(Q, cameraMatrix, distortionCoefficient, configuration);
         point_cloud(Q, configuration);
     }
-
-    auto finish_time = get_current_time_fenced();
-//    auto result_time = to_us(finish_time - start_time)/1000000;
-    auto result_time = to_us(finish_time - start_time);
-    std::cout << "Total time in seconds: " << result_time <<std::endl;
     return 0;
 }
 

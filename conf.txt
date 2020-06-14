@@ -1,4 +1,4 @@
-with_calibration: false
+with_calibration: true
 find_points: true
 save_points: true
 visualize: true
