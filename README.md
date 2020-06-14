@@ -12,20 +12,20 @@ Take two pictures of scene, by moving camera for several centimeters only horizo
 <a href="https://www.google.com/url?sa=i&url=https%3A%2F%2Fstackoverflow.com%2Fquestions%2F25233198%2Fopencv-2-4-9-for-python-cannot-find-chessboard-camera-calibration-tutorial&psig=AOvVaw2jzPieQ-iSL9dN0-v9lvF5&ust=1592231916323000&source=images&cd=vfe&ved=0CA0QjhxqFwoTCOjTgaDEgeoCFQAAAAAdAAAAABAD">**Link is here**</a>.
 2) Put it on flat surface and make not less than 30 photos of it. Try to make photos accurately, whole pattern should 
 be visible on your photos. Put them in `calibration_images` folder.
-3) Run program with conf.txt, where with_calibration is set to be **true**, and try to make reprojection error as much as 
+3) Run program with conf.txt, where `with_calibration` is set to be **true**, and try to make reprojection error as much as 
 possible. It should be less than 1. After you got normal reprojection error, the results of your calibration will be 
-stored in `CalibrationMatrices.yml` file. You should set with_calibration to be **false** to avoid rerunning calibration.
+stored in `CalibrationMatrices.yml` file. You should set `with_calibration` to be **false** to avoid rerunning calibration.
 4) Next step you need to take two pictures on same camera, moving it a little bit horizontally, 
 to simulate stereo camera pictures. Try not to move camera at all, only horizontal movement! 
-Put them in `working_images` folder and name them correctly: **`left.jpg`** and **`right.jpg`**.
-5) Run program with find_points set to be **true** and select algorithm of searching disparity
-`(sgbm: true/false)`. I recommend you to use sgbm: true and downscale: true to get good results, 
-but if you don't want to set all sgbm algorithm parameter, set sgbm to **false** and program will 
+Put them in `working_images` folder and name them correctly: **left.jpg** and **right.jpg**.
+5) Run program with `find_points` set to be **true** and select algorithm of searching disparity
+`(sgbm: true/false)`. I recommend you to use `sgbm`: **true** and `downscale`: **true** to get good results, 
+but if you don't want to set all sgbm algorithm parameter, set `sgbm` to **false** and program will 
 run bm algorithm.  Watch what you got in `working_images` folder. Have a look at 
 `filtered_disparity.jpg` and `undistorted_left.jpg/undistorted_right.jpg` pictures. 
 If you got a good disparity (smooth) and without black regions(uncertain regions) you are 
 lucky enough. If not, you should tune parameters in `conf.txt`.
-6) If you got smooth disparity map, in `conf.txt` set **save_points** to be **true** and after 
+6) If you got smooth disparity map, in `conf.txt` set `save_points` to be **true** and after 
 running program you will get `points.txt` in **xyzrgb** format. Recommended to put this file in 
 Meshlab to watch what you got!
 
